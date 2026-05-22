@@ -108,6 +108,42 @@ def mode_radio(key):
     return st.radio("모드", ["입력", "수정"], horizontal=True, key=f"mode_{key}")
 
 
+def draft_key(table):
+    return f"draft_{table}"
+
+
+def clear_draft(table):
+    st.session_state.pop(draft_key(table), None)
+
+
+def clear_form_state(table):
+    clear_draft(table)
+    st.session_state.pop(f"loaded_{table}", None)
+
+
+def get_draft(table):
+    return st.session_state.get(draft_key(table), {})
+
+
+def save_draft(table, data):
+    st.session_state[draft_key(table)] = data
+
+
+def draft_val(table, key, loaded, default=None):
+    draft = get_draft(table)
+    if key in draft and draft[key] is not None:
+        return draft[key]
+    if loaded and loaded.get(key) is not None:
+        return loaded[key]
+    return default
+
+
+def render_reset_button(table):
+    if st.button("초기화", key=f"reset_{table}"):
+        clear_form_state(table)
+        st.rerun()
+
+
 def render_edit_loader(sb, table, pk, labels_rows):
     if not labels_rows:
         st.info("등록된 항목이 없습니다.")
@@ -118,6 +154,7 @@ def render_edit_loader(sb, table, pk, labels_rows):
     if st.button("불러오기", key=f"load_{table}"):
         row = sb.table(table).select("*").eq(pk, ids[idx]).single().execute().data
         st.session_state[f"loaded_{table}"] = row
+        clear_draft(table)
         st.rerun()
     return st.session_state.get(f"loaded_{table}")
 
@@ -144,10 +181,10 @@ def tab_episodes(sb):
             st.info("항목을 선택한 뒤 「불러오기」를 누르세요.")
             return
 
+    render_reset_button("episodes")
+
     def val(key, default=None):
-        if loaded and loaded.get(key) is not None:
-            return loaded[key]
-        return default
+        return draft_val("episodes", key, loaded, default)
 
     ud = val("upload_date")
     if isinstance(ud, str):
@@ -193,11 +230,14 @@ def tab_episodes(sb):
             if mode == "수정":
                 eid = loaded[pk]
                 sb.table("episodes").update(payload).eq(pk, eid).execute()
+                st.session_state["loaded_episodes"] = {**loaded, **payload}
                 st.success(f"회차 {eid}번 수정 완료")
             else:
                 payload[pk] = next_id(sb, "episodes", pk)
                 sb.table("episodes").insert(payload).execute()
                 st.success(f"회차 {payload[pk]}번 저장 완료")
+            save_draft("episodes", payload)
+            st.rerun()
         except Exception as e:
             st.error(str(e))
 
@@ -224,13 +264,13 @@ def tab_characters(sb):
             st.info("항목을 선택한 뒤 「불러오기」를 누르세요.")
             return
 
+    render_reset_button("characters")
+
     def val(key, default=""):
-        if loaded and key in loaded and loaded[key] is not None:
-            v = loaded[key]
-            if key == "appearance_episodes":
-                return format_comma_json(v)
-            return v
-        return default
+        v = draft_val("characters", key, loaded, default)
+        if key == "appearance_episodes" and v not in (None, ""):
+            return format_comma_json(v)
+        return v if v is not None else default
 
     with st.form("form_characters"):
         name = st.text_input("name (이름)", value=val("name"))
@@ -261,11 +301,18 @@ def tab_characters(sb):
             if mode == "수정":
                 eid = loaded[pk]
                 sb.table("characters").update(payload).eq(pk, eid).execute()
+                st.session_state["loaded_characters"] = {**loaded, **payload}
                 st.success(f"캐릭터 {eid}번 수정 완료")
             else:
                 payload[pk] = next_id(sb, "characters", pk)
                 sb.table("characters").insert(payload).execute()
                 st.success(f"캐릭터 {payload[pk]}번 저장 완료")
+            draft_payload = {
+                **payload,
+                "appearance_episodes": appearance_episodes.strip(),
+            }
+            save_draft("characters", draft_payload)
+            st.rerun()
         except Exception as e:
             st.error(str(e))
 
@@ -304,18 +351,20 @@ def tab_dialogues(sb):
             st.info("항목을 선택한 뒤 「불러오기」를 누르세요.")
             return
 
+    render_reset_button("dialogues")
+
     def ep_default():
-        if not loaded:
+        eid = draft_val("dialogues", "episode_id", loaded, None)
+        if eid is None:
             return 0
-        eid = loaded.get("episode_id")
         labels = list(ep_opts.keys())
         ids = list(ep_opts.values())
         return labels.index(next(l for l, i in zip(labels, ids) if i == eid)) if eid in ids else 0
 
     def ch_default():
-        if not loaded:
+        cid = draft_val("dialogues", "character_id", loaded, None)
+        if cid is None:
             return 0
-        cid = loaded.get("character_id")
         labels = list(ch_opts.keys())
         ids = list(ch_opts.values())
         return labels.index(next(l for l, i in zip(labels, ids) if i == cid)) if cid in ids else 0
@@ -335,14 +384,14 @@ def tab_dialogues(sb):
         )
         script = st.text_area(
             "script (대사)",
-            value=(loaded or {}).get("script") or "",
+            value=draft_val("dialogues", "script", loaded, "") or "",
             height=160,
         )
         cut_order = st.number_input(
             "cut_order (컷 위치)",
             min_value=0,
             step=1,
-            value=int((loaded or {}).get("cut_order") or 1),
+            value=int(draft_val("dialogues", "cut_order", loaded, 1) or 1),
         )
         submitted = st.form_submit_button("수정 저장" if mode == "수정" else "저장")
 
@@ -363,12 +412,15 @@ def tab_dialogues(sb):
             if mode == "수정":
                 eid = loaded[pk]
                 sb.table("dialogues").update(payload).eq(pk, eid).execute()
+                st.session_state["loaded_dialogues"] = {**loaded, **payload}
                 st.success(f"대사 {eid}번 수정 완료")
             else:
                 payload[pk] = next_id(sb, "dialogues", pk)
                 payload["embedding"] = None
                 sb.table("dialogues").insert(payload).execute()
                 st.success(f"대사 {payload[pk]}번 저장 완료")
+            save_draft("dialogues", payload)
+            st.rerun()
         except Exception as e:
             st.error(str(e))
 
@@ -403,18 +455,25 @@ def tab_terminology(sb):
             st.info("항목을 선택한 뒤 「불러오기」를 누르세요.")
             return
 
+    render_reset_button("terminology")
+
     def ep_idx():
-        if not loaded or not ep_opts:
+        eid = draft_val("terminology", "first_mentioned", loaded, None)
+        if eid is None or not ep_opts:
             return 0
-        eid = loaded.get("first_mentioned")
         ids = list(ep_opts.values())
         return ids.index(eid) if eid in ids else 0
 
     with st.form("form_terminology"):
-        term_name = st.text_input("term_name (명칭)", value=(loaded or {}).get("term_name") or "")
-        category = st.text_input("category (분류)", value=(loaded or {}).get("category") or "")
+        term_name = st.text_input(
+            "term_name (명칭)", value=draft_val("terminology", "term_name", loaded, "") or ""
+        )
+        category = st.text_input(
+            "category (분류)", value=draft_val("terminology", "category", loaded, "") or ""
+        )
         official_desc = st.text_area(
-            "official_desc (설명)", value=(loaded or {}).get("official_desc") or ""
+            "official_desc (설명)",
+            value=draft_val("terminology", "official_desc", loaded, "") or "",
         )
         ep_label = st.selectbox(
             "first_mentioned (첫 등장)",
@@ -441,11 +500,14 @@ def tab_terminology(sb):
             if mode == "수정":
                 eid = loaded[pk]
                 sb.table("terminology").update(payload).eq(pk, eid).execute()
+                st.session_state["loaded_terminology"] = {**loaded, **payload}
                 st.success(f"용어 {eid}번 수정 완료")
             else:
                 payload[pk] = next_id(sb, "terminology", pk)
                 sb.table("terminology").insert(payload).execute()
                 st.success(f"용어 {payload[pk]}번 저장 완료")
+            save_draft("terminology", payload)
+            st.rerun()
         except Exception as e:
             st.error(str(e))
 
@@ -479,10 +541,18 @@ def tab_etc(sb):
             st.info("항목을 선택한 뒤 「불러오기」를 누르세요.")
             return
 
+    render_reset_button("etc")
+
     with st.form("form_etc"):
-        etc_type = st.text_input("etc_type (분류)", value=(loaded or {}).get("etc_type") or "")
-        etc_name = st.text_input("etc_name (명칭)", value=(loaded or {}).get("etc_name") or "")
-        etc_desc = st.text_area("etc_desc (설명)", value=(loaded or {}).get("etc_desc") or "")
+        etc_type = st.text_input(
+            "etc_type (분류)", value=draft_val("etc", "etc_type", loaded, "") or ""
+        )
+        etc_name = st.text_input(
+            "etc_name (명칭)", value=draft_val("etc", "etc_name", loaded, "") or ""
+        )
+        etc_desc = st.text_area(
+            "etc_desc (설명)", value=draft_val("etc", "etc_desc", loaded, "") or ""
+        )
         submitted = st.form_submit_button("수정 저장" if mode == "수정" else "저장")
 
     if submitted:
@@ -498,11 +568,14 @@ def tab_etc(sb):
             if mode == "수정":
                 eid = loaded[pk]
                 sb.table("etc").update(payload).eq(pk, eid).execute()
+                st.session_state["loaded_etc"] = {**loaded, **payload}
                 st.success(f"기타 {eid}번 수정 완료")
             else:
                 payload[pk] = next_id(sb, "etc", pk)
                 sb.table("etc").insert(payload).execute()
                 st.success(f"기타 {payload[pk]}번 저장 완료")
+            save_draft("etc", payload)
+            st.rerun()
         except Exception as e:
             st.error(str(e))
 
