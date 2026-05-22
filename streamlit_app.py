@@ -196,7 +196,7 @@ def tab_episodes(sb):
     elif ud > DATE_MAX:
         ud = DATE_MAX
 
-    with st.form("form_episodes"):
+    with st.form("form_episodes", enter_to_submit=False):
         season = st.number_input("season (시즌)", min_value=0, step=1, value=int(val("season") or 1))
         season_episode = st.number_input(
             "season_episode (회차)", min_value=0, step=1, value=int(val("season_episode") or 1)
@@ -272,7 +272,7 @@ def tab_characters(sb):
             return format_comma_json(v)
         return v if v is not None else default
 
-    with st.form("form_characters"):
+    with st.form("form_characters", enter_to_submit=False):
         name = st.text_input("name (이름)", value=val("name"))
         aliases = st.text_input("aliases (별명)", value=val("aliases"))
         appearance_episodes = st.text_input(
@@ -369,7 +369,7 @@ def tab_dialogues(sb):
         ids = list(ch_opts.values())
         return labels.index(next(l for l, i in zip(labels, ids) if i == cid)) if cid in ids else 0
 
-    with st.form("form_dialogues"):
+    with st.form("form_dialogues", enter_to_submit=False):
         ep_label = st.selectbox(
             "episode_id (회차)",
             list(ep_opts.keys()) if ep_opts else ["(없음)"],
@@ -464,7 +464,7 @@ def tab_terminology(sb):
         ids = list(ep_opts.values())
         return ids.index(eid) if eid in ids else 0
 
-    with st.form("form_terminology"):
+    with st.form("form_terminology", enter_to_submit=False):
         term_name = st.text_input(
             "term_name (명칭)", value=draft_val("terminology", "term_name", loaded, "") or ""
         )
@@ -543,7 +543,7 @@ def tab_etc(sb):
 
     render_reset_button("etc")
 
-    with st.form("form_etc"):
+    with st.form("form_etc", enter_to_submit=False):
         etc_type = st.text_input(
             "etc_type (분류)", value=draft_val("etc", "etc_type", loaded, "") or ""
         )
