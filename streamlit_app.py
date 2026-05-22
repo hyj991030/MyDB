@@ -2,6 +2,9 @@ import json
 from datetime import date
 
 import streamlit as st
+
+DATE_MIN = date(2010, 1, 1)
+DATE_MAX = date.today()
 from supabase import create_client
 
 
@@ -150,7 +153,11 @@ def tab_episodes(sb):
     if isinstance(ud, str):
         ud = date.fromisoformat(ud[:10])
     if ud is None:
-        ud = date.today()
+        ud = DATE_MAX
+    if ud < DATE_MIN:
+        ud = DATE_MIN
+    elif ud > DATE_MAX:
+        ud = DATE_MAX
 
     with st.form("form_episodes"):
         season = st.number_input("season (시즌)", min_value=0, step=1, value=int(val("season") or 1))
@@ -158,7 +165,12 @@ def tab_episodes(sb):
             "season_episode (회차)", min_value=0, step=1, value=int(val("season_episode") or 1)
         )
         title = st.text_input("title (제목)", value=val("title") or "")
-        upload_date = st.date_input("upload_date (업로드일)", value=ud)
+        upload_date = st.date_input(
+            "upload_date (업로드일)",
+            value=ud,
+            min_value=DATE_MIN,
+            max_value=DATE_MAX,
+        )
         authors_note = st.text_area("authors_note (작가의 말)", value=val("authors_note") or "")
         plot_summary = st.text_area("plot_summary (줄거리)", value=val("plot_summary") or "")
         main_events = st.text_area("main_events (세부 내용)", value=val("main_events") or "")
