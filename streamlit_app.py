@@ -61,6 +61,22 @@ def format_comma_json(val):
     return str(val)
 
 
+def parse_comma_ints(text):
+    text = (text or "").strip()
+    if not text:
+        return None
+    parts = [p.strip() for p in text.split(",") if p.strip()]
+    if not parts:
+        return None
+    out = []
+    for p in parts:
+        try:
+            out.append(int(p))
+        except ValueError as e:
+            raise ValueError(f"숫자만 입력해 주세요: {p}") from e
+    return out
+
+
 def next_id(sb, table, pk):
     res = sb.table(table).select(pk).order(pk, desc=True).limit(1).execute()
     rows = res.data or []
@@ -184,7 +200,10 @@ def tab_episodes(sb):
     render_reset_button("episodes")
 
     def val(key, default=None):
-        return draft_val("episodes", key, loaded, default)
+        v = draft_val("episodes", key, loaded, default)
+        if key == "character_ids" and v not in (None, ""):
+            return format_comma_json(v)
+        return v
 
     ud = val("upload_date")
     if isinstance(ud, str):
@@ -211,11 +230,21 @@ def tab_episodes(sb):
         authors_note = st.text_area("authors_note (작가의 말)", value=val("authors_note") or "")
         plot_summary = st.text_area("plot_summary (줄거리)", value=val("plot_summary") or "")
         main_events = st.text_area("main_events (세부 내용)", value=val("main_events") or "")
+        character_ids = st.text_input(
+            "character_ids (등장 캐릭터)",
+            value=val("character_ids") or "",
+            help="쉼표(,)로 구분, 띄어쓰기 없이 (예: 1,2,3)",
+        )
         submitted = st.form_submit_button("수정 저장" if mode == "수정" else "저장")
 
     if submitted:
         if not title.strip():
             st.warning("제목을 입력해 주세요.")
+            return
+        try:
+            character_ids_parsed = parse_comma_ints(character_ids)
+        except ValueError as e:
+            st.warning(str(e))
             return
         payload = {
             "season": int(season),
@@ -225,6 +254,7 @@ def tab_episodes(sb):
             "authors_note": authors_note.strip() or None,
             "plot_summary": plot_summary.strip() or None,
             "main_events": main_events.strip() or None,
+            "character_ids": character_ids_parsed,
         }
         try:
             if mode == "수정":
@@ -236,7 +266,10 @@ def tab_episodes(sb):
                 payload[pk] = next_id(sb, "episodes", pk)
                 sb.table("episodes").insert(payload).execute()
                 st.success(f"회차 {payload[pk]}번 저장 완료")
-            save_draft("episodes", payload)
+            save_draft(
+                "episodes",
+                {**payload, "character_ids": character_ids.strip()},
+            )
             st.rerun()
         except Exception as e:
             st.error(str(e))
@@ -290,10 +323,15 @@ def tab_characters(sb):
         if not name.strip():
             st.warning("이름을 입력해 주세요.")
             return
+        try:
+            appearance_episodes_parsed = parse_comma_ints(appearance_episodes)
+        except ValueError as e:
+            st.warning(str(e))
+            return
         payload = {
             "name": name.strip(),
             "aliases": aliases.strip() or None,
-            "appearance_episodes": parse_comma_json(appearance_episodes),
+            "appearance_episodes": appearance_episodes_parsed,
             "appearance_desc": appearance_desc.strip() or None,
             "personality_traits": personality_traits.strip() or None,
         }
