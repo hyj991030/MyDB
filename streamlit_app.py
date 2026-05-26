@@ -104,8 +104,25 @@ def fetch_characters(sb):
     return res.data or []
 
 
+TABLE_SELECT = {
+    "episodes": (
+        "episode_id, season, season_episode, title, upload_date, "
+        "authors_note, plot_summary, character_ids"
+    ),
+    "episodes_events": "episode_id, season, season_episode, main_events",
+    "characters": (
+        "character_id, name, aliases, appearance_episodes, "
+        "appearance_desc, personality_traits"
+    ),
+    "dialogues": "dialogue_id, episode_id, character_id, script",
+    "terminology": "term_id, term_name, category, official_desc, first_mentioned",
+    "etc": "etc_id, etc_type, etc_name, etc_desc",
+}
+
+
 def fetch_rows(sb, table, pk):
-    res = sb.table(table).select("*").order(pk).execute()
+    cols = TABLE_SELECT.get(table, "*")
+    res = sb.table(table).select(cols).order(pk).execute()
     return res.data or []
 
 
@@ -261,6 +278,7 @@ def tab_episodes(sb):
                 st.success(f"회차 {eid}번 수정 완료")
             else:
                 payload[pk] = next_id(sb, "episodes", pk)
+                payload["embedding"] = None
                 sb.table("episodes").insert(payload).execute()
                 st.success(f"회차 {payload[pk]}번 저장 완료")
             save_draft(
@@ -351,6 +369,7 @@ def tab_episodes_events(sb):
                 st.session_state["loaded_episodes_events"] = {**loaded, **payload}
                 st.success(f"회차 세부 (회차 {loaded['episode_id']}) 수정 완료")
             else:
+                payload["embedding"] = None
                 sb.table("episodes_events").insert(payload).execute()
                 st.success(
                     f"회차 세부 저장 완료 ({ep['season']}부 {ep['season_episode']}화)"
@@ -429,6 +448,7 @@ def tab_characters(sb):
                 st.success(f"캐릭터 {eid}번 수정 완료")
             else:
                 payload[pk] = next_id(sb, "characters", pk)
+                payload["embedding"] = None
                 sb.table("characters").insert(payload).execute()
                 st.success(f"캐릭터 {payload[pk]}번 저장 완료")
             draft_payload = {
