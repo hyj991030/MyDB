@@ -88,8 +88,7 @@ def fetch_episodes(sb):
     res = (
         sb.table("episodes")
         .select("episode_id, season, season_episode, title")
-        .order("season")
-        .order("season_episode")
+        .order("episode_id")
         .execute()
     )
     return res.data or []
@@ -112,7 +111,7 @@ def fetch_rows(sb, table, pk):
 
 def episode_options(sb):
     eps = fetch_episodes(sb)
-    return {episode_label(e): e["episode_id"] for e in eps}
+    return {f"{e['episode_id']}: {episode_label(e)}": e["episode_id"] for e in eps}
 
 
 def character_options(sb):
