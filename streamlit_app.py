@@ -465,7 +465,7 @@ def tab_dialogues(sb):
             ep = eps.get(r.get("episode_id"), "?")
             nm = chs.get(r.get("character_id"), "?")
             preview = (r.get("script") or "")[:36]
-            items.append((f"{r[pk]}: [{ep}] {nm} #{r.get('cut_order')} {preview}", r[pk]))
+            items.append((f"{r[pk]}: [{ep}] {nm} {preview}", r[pk]))
         loaded = render_edit_loader(sb, "dialogues", pk, items)
         if loaded is None and not rows:
             return
@@ -511,12 +511,6 @@ def tab_dialogues(sb):
             value=draft_val("dialogues", "script", loaded, "") or "",
             height=160,
         )
-        cut_order = st.number_input(
-            "cut_order (컷 위치)",
-            min_value=0,
-            step=1,
-            value=int(draft_val("dialogues", "cut_order", loaded, 1) or 1),
-        )
         submitted = st.form_submit_button("수정 저장" if mode == "수정" else "저장")
 
     if submitted:
@@ -530,7 +524,6 @@ def tab_dialogues(sb):
             "episode_id": ep_opts[ep_label],
             "character_id": ch_opts[ch_label],
             "script": script.strip(),
-            "cut_order": int(cut_order),
         }
         try:
             if mode == "수정":
