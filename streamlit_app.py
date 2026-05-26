@@ -229,7 +229,6 @@ def tab_episodes(sb):
         )
         authors_note = st.text_area("authors_note (작가의 말)", value=val("authors_note") or "")
         plot_summary = st.text_area("plot_summary (줄거리)", value=val("plot_summary") or "")
-        main_events = st.text_area("main_events (세부 내용)", value=val("main_events") or "")
         character_ids = st.text_input(
             "character_ids (등장 캐릭터)",
             value=val("character_ids") or "",
@@ -253,7 +252,6 @@ def tab_episodes(sb):
             "upload_date": upload_date.isoformat(),
             "authors_note": authors_note.strip() or None,
             "plot_summary": plot_summary.strip() or None,
-            "main_events": main_events.strip() or None,
             "character_ids": character_ids_parsed,
         }
         try:
@@ -270,6 +268,95 @@ def tab_episodes(sb):
                 "episodes",
                 {**payload, "character_ids": character_ids.strip()},
             )
+            st.rerun()
+        except Exception as e:
+            st.error(str(e))
+
+
+def tab_episodes_events(sb):
+    st.subheader("회차 세부")
+    mode = mode_radio("episodes_events")
+    ep_opts = episode_options(sb)
+    episodes_by_id = {e["episode_id"]: e for e in fetch_episodes(sb)}
+
+    if not ep_opts:
+        st.warning("먼저 회차를 등록하세요.")
+        return
+
+    loaded = None
+    if mode == "수정":
+        rows = (
+            sb.table("episodes_events")
+            .select("episode_id, season, season_episode, main_events")
+            .order("episode_id")
+            .order("season_episode")
+            .execute()
+            .data
+            or []
+        )
+        items = []
+        for r in rows:
+            ep = episodes_by_id.get(r.get("episode_id"), {})
+            lbl = episode_label(ep) if ep else f"id={r.get('episode_id')}"
+            preview = (r.get("main_events") or "")[:40]
+            items.append((f"{r['episode_id']}: {lbl} — {preview}", r["episode_id"]))
+        loaded = render_edit_loader(sb, "episodes_events", "episode_id", items)
+        if loaded is None and not rows:
+            return
+        if loaded:
+            st.markdown(
+                f"**episode_id:** {loaded['episode_id']} · "
+                f"{loaded['season']}부 {loaded['season_episode']}화"
+            )
+        else:
+            st.info("항목을 선택한 뒤 「불러오기」를 누르세요.")
+            return
+
+    render_reset_button("episodes_events")
+
+    def ep_pick_default():
+        if not loaded:
+            return 0
+        eid = loaded.get("episode_id")
+        labels = list(ep_opts.keys())
+        ids = list(ep_opts.values())
+        return labels.index(next(l for l, i in zip(labels, ids) if i == eid)) if eid in ids else 0
+
+    with st.form("form_episodes_events", enter_to_submit=False):
+        ep_label = st.selectbox(
+            "회차 선택",
+            list(ep_opts.keys()),
+            index=ep_pick_default(),
+            disabled=mode == "수정",
+        )
+        main_events = st.text_area(
+            "main_events (세부 내용)",
+            value=(loaded or {}).get("main_events") or "",
+            height=200,
+        )
+        submitted = st.form_submit_button("수정 저장" if mode == "수정" else "저장")
+
+    if submitted:
+        ep = episodes_by_id[ep_opts[ep_label]]
+        payload = {
+            "episode_id": ep["episode_id"],
+            "season": ep["season"],
+            "season_episode": ep["season_episode"],
+            "main_events": main_events.strip() or None,
+        }
+        try:
+            if mode == "수정":
+                sb.table("episodes_events").update(payload).eq(
+                    "episode_id", loaded["episode_id"]
+                ).execute()
+                st.session_state["loaded_episodes_events"] = {**loaded, **payload}
+                st.success(f"회차 세부 (회차 {loaded['episode_id']}) 수정 완료")
+            else:
+                sb.table("episodes_events").insert(payload).execute()
+                st.success(
+                    f"회차 세부 저장 완료 ({ep['season']}부 {ep['season_episode']}화)"
+                )
+            save_draft("episodes_events", payload)
             st.rerun()
         except Exception as e:
             st.error(str(e))
@@ -625,16 +712,20 @@ def main():
 
     sb = supabase_client()
 
-    t1, t2, t3, t4, t5 = st.tabs(["회차", "캐릭터", "대사", "용어", "기타"])
+    t1, t2, t3, t4, t5, t6 = st.tabs(
+        ["회차", "회차 세부", "캐릭터", "대사", "용어", "기타"]
+    )
     with t1:
         tab_episodes(sb)
     with t2:
-        tab_characters(sb)
+        tab_episodes_events(sb)
     with t3:
-        tab_dialogues(sb)
+        tab_characters(sb)
     with t4:
-        tab_terminology(sb)
+        tab_dialogues(sb)
     with t5:
+        tab_terminology(sb)
+    with t6:
         tab_etc(sb)
 
 
