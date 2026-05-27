@@ -112,7 +112,7 @@ TABLE_SELECT = {
     "episodes_events": "episode_id, season, season_episode, main_events",
     "characters": (
         "character_id, name, aliases, appearance_episodes, "
-        "appearance_desc, personality_traits"
+        "keyword"
     ),
     "dialogues": "dialogue_id, episode_id, character_id, script",
     "terminology": "term_id, term_name, category, official_desc, first_mentioned",
@@ -418,9 +418,10 @@ def tab_characters(sb):
             value=val("appearance_episodes"),
             help="쉼표(,)로 구분, 띄어쓰기 없이",
         )
-        appearance_desc = st.text_area("appearance_desc (외형)", value=val("appearance_desc"))
-        personality_traits = st.text_area(
-            "personality_traits (성격)", value=val("personality_traits")
+        keyword = st.text_area(
+            "keyword (외형·성격·특징)",
+            value=val("keyword"),
+            help="캐릭터의 외형, 성격, 특징을 요약한 텍스트",
         )
         submitted = st.form_submit_button("수정 저장" if mode == "수정" else "저장")
 
@@ -437,8 +438,7 @@ def tab_characters(sb):
             "name": name.strip(),
             "aliases": aliases.strip() or None,
             "appearance_episodes": appearance_episodes_parsed,
-            "appearance_desc": appearance_desc.strip() or None,
-            "personality_traits": personality_traits.strip() or None,
+            "keyword": keyword.strip() or None,
         }
         try:
             if mode == "수정":
