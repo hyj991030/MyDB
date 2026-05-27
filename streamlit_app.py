@@ -84,6 +84,25 @@ def next_id(sb, table, pk):
     return int(cur) + 1
 
 
+def next_dialogue_order(sb, episode_id: int) -> int:
+    rows = (
+        sb.table("dialogues")
+        .select("order")
+        .eq("episode_id", episode_id)
+        .order("order", desc=True)
+        .limit(1)
+        .execute()
+        .data
+        or []
+    )
+    if not rows:
+        return 1
+    current = rows[0].get("order")
+    if current is None:
+        return 1
+    return int(current) + 1
+
+
 def fetch_episodes(sb):
     res = (
         sb.table("episodes")
@@ -114,7 +133,7 @@ TABLE_SELECT = {
         "character_id, name, aliases, appearance_episodes, "
         "keyword"
     ),
-    "dialogues": "dialogue_id, episode_id, character_id, script",
+    "dialogues": "dialogue_id, episode_id, character_id, script, order",
     "terminology": "term_id, term_name, category, official_desc, first_mentioned",
     "etc": "etc_id, etc_type, etc_name, etc_desc",
 }
@@ -476,6 +495,9 @@ def tab_dialogues(sb):
     loaded = None
     if mode == "입력":
         st.markdown(f"**{pk}:** {next_id(sb, 'dialogues', pk)}")
+        if ep_opts:
+            first_ep = list(ep_opts.values())[0]
+            st.caption(f"다음 order (선택 회차 기준): {next_dialogue_order(sb, first_ep)}")
     else:
         rows = fetch_rows(sb, "dialogues", pk)
         eps = {e["episode_id"]: episode_label(e) for e in fetch_episodes(sb)}
@@ -485,12 +507,16 @@ def tab_dialogues(sb):
             ep = eps.get(r.get("episode_id"), "?")
             nm = chs.get(r.get("character_id"), "?")
             preview = (r.get("script") or "")[:36]
-            items.append((f"{r[pk]}: [{ep}] {nm} {preview}", r[pk]))
+            ord_n = r.get("order")
+            ord_tag = f"#{ord_n} " if ord_n is not None else ""
+            items.append((f"{r[pk]}: {ord_tag}[{ep}] {nm} {preview}", r[pk]))
         loaded = render_edit_loader(sb, "dialogues", pk, items)
         if loaded is None and not rows:
             return
         if loaded:
             st.markdown(f"**{pk}:** {loaded[pk]}")
+            if loaded.get("order") is not None:
+                st.markdown(f"**order:** {loaded['order']}")
         else:
             st.info("항목을 선택한 뒤 「불러오기」를 누르세요.")
             return
@@ -553,9 +579,12 @@ def tab_dialogues(sb):
                 st.success(f"대사 {eid}번 수정 완료")
             else:
                 payload[pk] = next_id(sb, "dialogues", pk)
+                payload["order"] = next_dialogue_order(sb, payload["episode_id"])
                 payload["embedding"] = None
                 sb.table("dialogues").insert(payload).execute()
-                st.success(f"대사 {payload[pk]}번 저장 완료")
+                st.success(
+                    f"대사 {payload[pk]}번 저장 완료 (order={payload['order']})"
+                )
             save_draft("dialogues", payload)
             st.rerun()
         except Exception as e:
