@@ -129,10 +129,7 @@ TABLE_SELECT = {
         "authors_note, plot_summary, character_ids"
     ),
     "episodes_events": "episode_id, season, season_episode, main_events",
-    "characters": (
-        "character_id, name, aliases, appearance_episodes, "
-        "keyword"
-    ),
+    "characters": "character_id, name, aliases, keyword",
     "dialogues": "dialogue_id, episode_id, character_id, script, order",
     "terminology": "term_id, term_name, category, official_desc, first_mentioned",
     "etc": "etc_id, etc_type, etc_name, etc_desc",
@@ -425,18 +422,11 @@ def tab_characters(sb):
 
     def val(key, default=""):
         v = draft_val("characters", key, loaded, default)
-        if key == "appearance_episodes" and v not in (None, ""):
-            return format_comma_json(v)
         return v if v is not None else default
 
     with st.form("form_characters", enter_to_submit=False):
         name = st.text_input("name (이름)", value=val("name"))
         aliases = st.text_input("aliases (별명)", value=val("aliases"))
-        appearance_episodes = st.text_input(
-            "appearance_episodes (출연회차)",
-            value=val("appearance_episodes"),
-            help="쉼표(,)로 구분, 띄어쓰기 없이",
-        )
         keyword = st.text_area(
             "keyword (외형·성격·특징)",
             value=val("keyword"),
@@ -448,15 +438,9 @@ def tab_characters(sb):
         if not name.strip():
             st.warning("이름을 입력해 주세요.")
             return
-        try:
-            appearance_episodes_parsed = parse_comma_ints(appearance_episodes)
-        except ValueError as e:
-            st.warning(str(e))
-            return
         payload = {
             "name": name.strip(),
             "aliases": aliases.strip() or None,
-            "appearance_episodes": appearance_episodes_parsed,
             "keyword": keyword.strip() or None,
         }
         try:
@@ -470,11 +454,7 @@ def tab_characters(sb):
                 payload["embedding"] = None
                 sb.table("characters").insert(payload).execute()
                 st.success(f"캐릭터 {payload[pk]}번 저장 완료")
-            draft_payload = {
-                **payload,
-                "appearance_episodes": appearance_episodes.strip(),
-            }
-            save_draft("characters", draft_payload)
+            save_draft("characters", payload)
             st.rerun()
         except Exception as e:
             st.error(str(e))
