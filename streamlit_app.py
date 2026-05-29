@@ -77,8 +77,14 @@ def parse_comma_ints(text):
     return out
 
 
+CHARACTER_RESERVED_IDS = frozenset({500, 501, 502})
+
+
 def next_id(sb, table, pk):
-    res = sb.table(table).select(pk).order(pk, desc=True).limit(1).execute()
+    query = sb.table(table).select(pk)
+    if table == "characters" and pk == "character_id":
+        query = query.not_.in_(pk, list(CHARACTER_RESERVED_IDS))
+    res = query.order(pk, desc=True).limit(1).execute()
     rows = res.data or []
     cur = rows[0][pk] if rows else 0
     return int(cur) + 1
